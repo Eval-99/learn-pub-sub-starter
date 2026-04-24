@@ -26,7 +26,7 @@ func main() {
 
 	amqpChan, err := conn.Channel()
 	if err != nil {
-		log.Fatalf("Failed RabbitMQ to create RabbitMQ channel: %v", err)
+		log.Fatalf("Failed to create RabbitMQ channel: %v", err)
 		return
 	}
 
