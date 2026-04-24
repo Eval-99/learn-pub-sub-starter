@@ -8,6 +8,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 )
@@ -30,15 +31,44 @@ func main() {
 		return
 	}
 
-	err = pubsub.PublishJSON(
-		amqpChan,
-		routing.ExchangePerilDirect,
-		routing.PauseKey,
-		routing.PlayingState{IsPaused: true},
-	)
-	if err != nil {
-		log.Fatalf("Failed to publish JSON: %v", err)
-		return
+	gamelogic.PrintServerHelp()
+	for {
+		userInputs := gamelogic.GetInput()
+		if userInputs == nil {
+			continue
+		}
+
+		if userInputs[0] == "pause" {
+			fmt.Println("Pausing game...")
+			err = pubsub.PublishJSON(
+				amqpChan,
+				routing.ExchangePerilDirect,
+				routing.PauseKey,
+				routing.PlayingState{IsPaused: true},
+			)
+			if err != nil {
+				log.Fatalf("Failed to publish JSON: %v", err)
+				return
+			}
+		} else if userInputs[0] == "resume" {
+			fmt.Println("Resuming game...")
+			err = pubsub.PublishJSON(
+				amqpChan,
+				routing.ExchangePerilDirect,
+				routing.PauseKey,
+				routing.PlayingState{IsPaused: false},
+			)
+			if err != nil {
+				log.Fatalf("Failed to publish JSON: %v", err)
+				return
+			}
+		} else if userInputs[0] == "quit" {
+			fmt.Println("Quiting game...")
+			break
+		} else {
+			fmt.Println("Not a valid command")
+		}
+
 	}
 
 	signalChan := make(chan os.Signal, 1)
