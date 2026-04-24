@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -38,7 +36,8 @@ func main() {
 			continue
 		}
 
-		if userInputs[0] == "pause" {
+		switch userInputs[0] {
+		case "pause":
 			fmt.Println("Pausing game...")
 			err = pubsub.PublishJSON(
 				amqpChan,
@@ -50,7 +49,7 @@ func main() {
 				log.Fatalf("Failed to publish JSON: %v", err)
 				return
 			}
-		} else if userInputs[0] == "resume" {
+		case "resume":
 			fmt.Println("Resuming game...")
 			err = pubsub.PublishJSON(
 				amqpChan,
@@ -62,17 +61,11 @@ func main() {
 				log.Fatalf("Failed to publish JSON: %v", err)
 				return
 			}
-		} else if userInputs[0] == "quit" {
+		case "quit":
 			fmt.Println("Quiting game...")
-			break
-		} else {
+			return
+		default:
 			fmt.Println("Not a valid command")
 		}
-
 	}
-
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
-	fmt.Println("\nClossing connection to RabbitMQ")
 }
