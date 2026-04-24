@@ -28,7 +28,8 @@ func main() {
 		return
 	}
 
-	_, queue, err := pubsub.DeclareAndBind(conn,
+	_, queue, err := pubsub.DeclareAndBind(
+		conn,
 		routing.ExchangePerilDirect,
 		routing.PauseKey+"."+username,
 		routing.PauseKey,
