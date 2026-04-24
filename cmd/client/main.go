@@ -13,6 +13,7 @@ import (
 )
 
 func main() {
+	fmt.Println("Starting Peril client...")
 	const connectionString = "amqp://guest:guest@localhost:5672/"
 
 	conn, err := amqp.Dial(connectionString)
@@ -21,23 +22,25 @@ func main() {
 		return
 	}
 	defer conn.Close()
+	fmt.Println("Peril game client connected to RabbitMQ!")
 
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
-		fmt.Println(err)
+		log.Fatalf("Could not get username: %v", err)
 		return
 	}
 
-	_, _, err = pubsub.DeclareAndBind(conn,
+	_, queue, err := pubsub.DeclareAndBind(conn,
 		routing.ExchangePerilDirect,
 		routing.PauseKey+"."+username,
 		routing.PauseKey,
 		pubsub.Transient,
 	)
 	if err != nil {
-		log.Fatalf("Failed to declare and bind: %v", err)
+		log.Fatalf("could not subscribe to pause: %v", err)
 		return
 	}
+	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
