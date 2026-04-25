@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -48,10 +49,23 @@ func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) pubsub.Ack
 	}
 }
 
-func handlerWar(gs *gamelogic.GameState) func(war gamelogic.RecognitionOfWar) pubsub.Acktype {
+func publishGameLog(ch *amqp.Channel, username, msg string) error {
+	return pubsub.PublishGob(
+		ch,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug+"."+username,
+		routing.GameLog{
+			CurrentTime: time.Now().UTC(),
+			Message:     msg,
+			Username:    username,
+		},
+	)
+}
+
+func handlerWar(gs *gamelogic.GameState, ch *amqp.Channel) func(war gamelogic.RecognitionOfWar) pubsub.Acktype {
 	return func(war gamelogic.RecognitionOfWar) pubsub.Acktype {
 		defer fmt.Print("> ")
-		outcome, _, _ := gs.HandleWar(war)
+		outcome, winner, loser := gs.HandleWar(war)
 
 		switch outcome {
 		case gamelogic.WarOutcomeNotInvolved:
@@ -59,10 +73,37 @@ func handlerWar(gs *gamelogic.GameState) func(war gamelogic.RecognitionOfWar) pu
 		case gamelogic.WarOutcomeNoUnits:
 			return pubsub.NackDiscard
 		case gamelogic.WarOutcomeOpponentWon:
+			err := publishGameLog(
+				ch,
+				gs.GetUsername(),
+				fmt.Sprintf("%s won a war against %s", winner, loser),
+			)
+			if err != nil {
+				fmt.Println(err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack
 		case gamelogic.WarOutcomeYouWon:
+			err := publishGameLog(
+				ch,
+				gs.GetUsername(),
+				fmt.Sprintf("%s won a war against %s", winner, loser),
+			)
+			if err != nil {
+				fmt.Println(err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack
 		case gamelogic.WarOutcomeDraw:
+			err := publishGameLog(
+				ch,
+				gs.GetUsername(),
+				fmt.Sprintf("A war between %s and %s resulted in a draw", winner, loser),
+			)
+			if err != nil {
+				fmt.Println(err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack
 		default:
 			fmt.Println("Error, non valid outcome")
