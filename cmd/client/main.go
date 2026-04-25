@@ -33,47 +33,29 @@ func main() {
 		return
 	}
 
-	userState := gamelogic.NewGameState(username)
-
-	err = pubsub.SubscribeJSON(
-		conn,
-		routing.ExchangePerilDirect,
-		routing.PauseKey+"."+username,
-		routing.PauseKey,
-		pubsub.Transient,
-		handlerPause(userState),
-	)
-	if err != nil {
-		log.Fatalf("Failed to subscribe: %v", err)
-		return
-	}
+	gs := gamelogic.NewGameState(username)
 
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilTopic,
-		routing.ArmyMovesPrefix+"."+username,
+		routing.ArmyMovesPrefix+"."+gs.GetUsername(),
 		routing.ArmyMovesPrefix+".*",
 		pubsub.Transient,
-		func(move gamelogic.ArmyMove) pubsub.Acktype {
-			outcome := userState.HandleMove(move)
-
-			var result pubsub.Acktype
-
-			switch outcome {
-			case gamelogic.MoveOutComeSafe:
-				result = pubsub.Ack
-			case gamelogic.MoveOutcomeMakeWar:
-				result = pubsub.Ack
-			case gamelogic.MoveOutcomeSamePlayer:
-				result = pubsub.NackDiscard
-			}
-
-			return result
-		},
+		handlerMove(gs),
 	)
 	if err != nil {
-		log.Fatalf("Failed to subscribe: %v", err)
-		return
+		log.Fatalf("could not subscribe to army moves: %v", err)
+	}
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilDirect,
+		routing.PauseKey+"."+gs.GetUsername(),
+		routing.PauseKey,
+		pubsub.Transient,
+		handlerPause(gs),
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to pause: %v", err)
 	}
 
 	for {
@@ -84,9 +66,9 @@ func main() {
 
 		switch userInputs[0] {
 		case "spawn":
-			userState.CommandSpawn(userInputs)
+			gs.CommandSpawn(userInputs)
 		case "move":
-			move, err := userState.CommandMove(userInputs)
+			move, err := gs.CommandMove(userInputs)
 			if err != nil {
 				fmt.Println(err)
 				continue
@@ -104,7 +86,7 @@ func main() {
 			}
 
 		case "status":
-			userState.CommandStatus()
+			gs.CommandStatus()
 		case "help":
 			gamelogic.PrintClientHelp()
 		case "spam":
