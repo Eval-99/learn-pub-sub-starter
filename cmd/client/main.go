@@ -54,9 +54,21 @@ func main() {
 		routing.ArmyMovesPrefix+"."+username,
 		routing.ArmyMovesPrefix+".*",
 		pubsub.Transient,
-		func(move gamelogic.ArmyMove) {
-			userState.HandleMove(move)
-			fmt.Print("> ")
+		func(move gamelogic.ArmyMove) pubsub.Acktype {
+			outcome := userState.HandleMove(move)
+
+			var result pubsub.Acktype
+
+			switch outcome {
+			case gamelogic.MoveOutComeSafe:
+				result = pubsub.Ack
+			case gamelogic.MoveOutcomeMakeWar:
+				result = pubsub.Ack
+			case gamelogic.MoveOutcomeSamePlayer:
+				result = pubsub.NackDiscard
+			}
+
+			return result
 		},
 	)
 	if err != nil {
@@ -90,7 +102,6 @@ func main() {
 				fmt.Printf("error publishing move: %v\n", err)
 				continue
 			}
-			fmt.Printf("Moved %v units to %s\n", len(move.Units), move.ToLocation)
 
 		case "status":
 			userState.CommandStatus()
