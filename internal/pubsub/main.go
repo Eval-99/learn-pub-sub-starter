@@ -120,11 +120,45 @@ func DeclareAndBind(
 
 func SubscribeJSON[T any](
 	conn *amqp.Connection,
+	exchange, queueName, key string,
+	queueType SimpleQueueType,
+	handler func(T) Acktype,
+) error {
+	return subscribe[T](
+		conn, exchange, queueName, key, queueType, handler,
+		func(data []byte) (T, error) {
+			var target T
+			err := json.Unmarshal(data, &target)
+			return target, err
+		},
+	)
+}
+
+func SubscribeGob[T any](
+	conn *amqp.Connection,
+	exchange, queueName, key string,
+	queueType SimpleQueueType,
+	handler func(T) Acktype,
+) error {
+	return subscribe[T](
+		conn, exchange, queueName, key, queueType, handler,
+		func(data []byte) (T, error) {
+			buffer := bytes.NewBuffer(data)
+			decoder := gob.NewDecoder(buffer)
+			var target T
+			err := decoder.Decode(&target)
+			return target, err
+		})
+}
+
+func subscribe[T any](
+	conn *amqp.Connection,
 	exchange,
 	queueName,
 	key string,
-	queueType SimpleQueueType, // an enum to represent "durable" or "transient"
+	queueType SimpleQueueType,
 	handler func(T) Acktype,
+	unmarshaller func([]byte) (T, error),
 ) error {
 	amqpChan, amqpQueue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
 	if err != nil {
@@ -138,14 +172,13 @@ func SubscribeJSON[T any](
 
 	go func() {
 		for delivery := range deliveries {
-			var container T
-			err = json.Unmarshal(delivery.Body, &container)
+			item, err := unmarshaller(delivery.Body)
 			if err != nil {
-				fmt.Println(err)
+				fmt.Printf("Failed to unmarshal: %v\n", err)
 				continue
 			}
 
-			result := handler(container)
+			result := handler(item)
 			switch result {
 			case Ack:
 				delivery.Ack(false)
